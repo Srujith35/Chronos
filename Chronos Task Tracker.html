@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <title>Chronos</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f1f5f9;
+            --subtext: #94a3b8;
+            --accent: #38bdf8;
+            --today-accent: #fbbf24;
+            --danger: #f87171;
+            --success: #4ade80;
+            --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --safe-area-bottom: env(safe-area-inset-bottom);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: var(--font);
+            display: flex;
+            justify-content: center;
+            min-height: 100dvh; 
+            margin: 0;
+            padding-top: 10px;
+            overscroll-behavior-y: none;
+        }
+
+        .container {
+            width: 100%; 
+            max-width: 600px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            height: 100dvh;
+            padding-bottom: calc(10px + var(--safe-area-bottom));
+        }
+
+        /* --- Dashboard Switcher --- */
+        .dashboard-switcher {
+            display: flex;
+            background: var(--card);
+            padding: 4px;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            border: 1px solid rgba(255,255,255,0.05);
+            flex-shrink: 0;
+        }
+        .switch-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--subtext);
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        .switch-btn.active {
+            background: var(--accent);
+            color: var(--bg);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        /* --- Header & Stats --- */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-shrink: 0;
+        }
+        .header-left { display: flex; flex-direction: column; }
+        .title-row { display: flex; align-items: center; gap: 10px; }
+        h1 { font-size: 1.8rem; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+        
+        .date-btn {
+            background: rgba(255,255,255,0.05); border: none; color: var(--accent);
+            padding: 8px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        }
+        .date-picker-wrapper { position: relative; display: flex; align-items: center; }
+        #date-jumper {
+            position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+            opacity: 0; cursor: pointer;
+        }
+        .current-view-date { color: var(--subtext); font-size: 0.9rem; margin-top: 4px; font-weight: 500;}
+        #go-today-btn {
+            background: var(--accent); color: var(--bg); border: none; font-size: 0.75rem;
+            padding: 4px 10px; border-radius: 20px; font-weight: 700; margin-left: 8px;
+        }
+
+        .total-time-box {
+            text-align: right; background: rgba(30, 41, 59, 0.5);
+            padding: 8px 12px; border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .total-label { font-size: 0.6rem; color: var(--subtext); text-transform: uppercase; letter-spacing: 1px; }
+        .total-timer { font-size: 1.3rem; font-family: monospace; color: var(--accent); font-weight: bold; }
+
+        /* --- Calendar --- */
+        .calendar-strip {
+            display: flex;
+            overflow-x: auto;
+            gap: 8px;
+            margin-bottom: 1rem;
+            padding: 10px 5px; 
+            scrollbar-width: none;
+            flex-shrink: 0;
+            -webkit-overflow-scrolling: touch;
+        }
+        .calendar-strip::-webkit-scrollbar { display: none; }
+        
+        .day-card {
+            min-width: 60px; height: 75px; background: var(--card); border-radius: 16px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 5px 0; border: 1px solid rgba(255,255,255,0.05); flex-shrink: 0;
+            color: var(--subtext); user-select: none; transition: transform 0.2s, background 0.2s;
+        }
+        
+        .day-card.today { border: 1px solid var(--today-accent); color: var(--today-accent); }
+        .day-card.today .day-name { font-weight: 900; }
+
+        .day-card.active {
+            background: var(--accent); color: var(--bg);
+            border-color: var(--accent); transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+        }
+        .day-card.active.today { border: 2px solid #fff; background: var(--accent); color: var(--bg); }
+
+        .day-name { font-size: 0.75rem; text-transform: uppercase; margin-bottom: 4px; font-weight: 700; }
+        .day-num { font-size: 1.4rem; font-weight: 800; }
+
+        /* --- Weekly Goals --- */
+        .weekly-goals-container {
+            margin-bottom: 1rem; border: 1px solid rgba(255,255,255,0.05);
+            background: rgba(30, 41, 59, 0.4); border-radius: 16px; flex-shrink: 0;
+        }
+        .weekly-header {
+            padding: 12px 16px; display: flex; justify-content: space-between;
+            align-items: center; font-size: 0.95rem; font-weight: 600; color: var(--subtext);
+        }
+        .weekly-content { display: none; padding: 0 16px 16px 16px; }
+        .weekly-goals-container.open .weekly-content { display: block; }
+        
+        .weekly-item { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 12px; }
+        .weekly-check { width: 22px; height: 22px; border: 2px solid var(--subtext); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+        .weekly-item.done .weekly-check { background: var(--success); border-color: var(--success); color: #000; }
+        
+        .weekly-input-row { display: flex; gap: 10px; margin-top: 12px; height: 40px; }
+        .weekly-input { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: var(--text); border-radius: 8px; padding: 0 10px; font-size: 16px; }
+        .weekly-text-input { flex-grow: 1; }
+        .weekly-time-input { width: 60px; text-align: center; }
+        .weekly-add-btn { background: var(--accent); border: none; width: 40px; border-radius: 8px; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; }
+
+        /* --- Task Input --- */
+        .input-group {
+            display: flex; gap: 10px; margin-bottom: 1rem; background: var(--card);
+            padding: 6px 6px 6px 16px; border-radius: 50px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); flex-shrink: 0;
+        }
+        input[type="text"] {
+            background: transparent; border: none; color: var(--text); padding: 5px;
+            width: 100%; font-size: 16px; outline: none;
+        }
+        button#add-btn {
+            background: var(--accent); border: none; color: #0f172a; width: 42px; height: 42px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+
+        /* --- Task List --- */
+        ul.task-list-ul { 
+            list-style: none; padding: 0; margin: 0; flex-grow: 1; 
+            overflow-y: auto; padding-bottom: 40px; -webkit-overflow-scrolling: touch;
+        }
+        li.task-item {
+            background: var(--card); margin-bottom: 12px; padding: 16px;
+            border-radius: 16px; display: grid;
+            grid-template-columns: 1fr auto;
+            grid-template-rows: auto auto;
+            align-items: center; gap: 8px;
+            border-left: 5px solid transparent; 
+            user-select: none;
+            position: relative;
+        }
+        li.task-item.running {
+            border-left-color: var(--accent);
+            background: linear-gradient(90deg, #1e293b 0%, #16243a 100%);
+        }
+        li.task-item.completed .task-text { text-decoration: line-through; color: var(--subtext); opacity: 0.6; }
+
+        .task-main { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; width: 100%; }
+        .task-controls { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); }
+
+        .task-text { font-size: 1rem; line-height: 1.4; word-break: break-word; flex-grow: 1; }
+        .task-timer { font-family: monospace; font-size: 1rem; color: var(--subtext); font-weight: 500; }
+        li.task-item.running .task-timer { color: var(--accent); }
+
+        .btn-group { display: flex; gap: 15px; }
+        .icon-btn { background: transparent; border: none; color: var(--subtext); padding: 5px; display: flex; align-items: center; }
+        .icon-btn svg { width: 22px; height: 22px; fill: currentColor; }
+
+        /* Buttons Colors */
+        .play-btn { color: #ffffff; filter: drop-shadow(0 0 2px rgba(255,255,255,0.4)); }
+        .delete-btn { color: #ffffff; opacity: 0.8; }
+        .edit-btn { color: #ffffff; opacity: 0.8; } /* Added Edit Btn Style */
+        .save-btn { color: var(--success); } /* Save Btn Style */
+
+        /* Edit Mode Styles */
+        .edit-row { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; width: 100%; }
+        .edit-input-text { 
+            background: rgba(0,0,0,0.3); border: 1px solid var(--accent); color: white;
+            padding: 8px; border-radius: 8px; flex-grow: 1; font-size: 16px;
+        }
+        .edit-input-time {
+            background: rgba(0,0,0,0.3); border: 1px solid var(--accent); color: white;
+            padding: 8px; border-radius: 8px; width: 60px; text-align: center; font-size: 16px;
+        }
+
+        .empty-state { text-align: center; color: var(--subtext); margin-top: 3rem; opacity: 0.6; }
+
+        /* --- Footer --- */
+        .footer-controls {
+            margin-top: auto; padding-top: 10px; display: flex; justify-content: space-evenly;
+            font-size: 0.8rem; color: var(--subtext); flex-shrink: 0;
+        }
+        .text-btn { background: none; border: none; color: var(--subtext); font-weight: 600; padding: 10px; text-transform: uppercase; font-size: 0.75rem; }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%) translateY(50px);
+            background: #fff; color: #000; padding: 12px 24px; border-radius: 30px;
+            font-weight: 600; opacity: 0; transition: 0.3s; pointer-events: none; z-index: 999;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="dashboard-switcher">
+        <button id="btn-personal" class="switch-btn active" onclick="setDashboard('Personal')">Personal</button>
+        <button id="btn-office" class="switch-btn" onclick="setDashboard('Office')">Office</button>
+    </div>
+
+    <header>
+        <div class="header-left">
+            <div class="title-row">
+                <h1>Tasks</h1>
+                <div class="date-picker-wrapper">
+                    <button class="date-btn"><svg style="width:20px;height:20px;fill:currentColor" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg></button>
+                    <input type="date" id="date-jumper">
+                </div>
+            </div>
+            <div class="current-view-date">
+                <span id="view-date-display">Today</span>
+                <button id="go-today-btn" onclick="jumpToToday()" style="display:none">Today</button>
+            </div>
+        </div>
+        <div class="total-time-box">
+            <div class="total-label">Focus</div>
+            <div class="total-timer" id="global-timer">00:00</div>
+        </div>
+    </header>
+
+    <div class="calendar-strip" id="calendar-strip"></div>
+
+    <div class="weekly-goals-container open" id="weekly-goals-container">
+        <div class="weekly-header" onclick="toggleWeeklyGoals()">
+            <span id="weekly-header-text">Weekly Goals (0)</span>
+            <svg style="width:16px;height:16px;fill:currentColor" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+        </div>
+        <div class="weekly-content">
+            <ul class="task-list-ul" id="weekly-list" style="max-height: 150px;"></ul>
+            <div class="weekly-input-row">
+                <input type="text" class="weekly-input weekly-text-input" id="weekly-input" placeholder="Goal..." onkeypress="if(event.key === 'Enter') addWeeklyGoal()">
+                <input type="tel" class="weekly-input weekly-time-input" id="weekly-time-input" placeholder="Min" onkeypress="if(event.key === 'Enter') addWeeklyGoal()">
+                <button class="weekly-add-btn" onclick="addWeeklyGoal()">+</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="input-group">
+        <input type="text" id="task-input" placeholder="Add Today's task...pooji">
+        <button id="add-btn"><svg style="width:24px;height:24px;fill:currentColor" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>
+    </div>
+
+    <ul class="task-list-ul" id="task-list"></ul>
+
+    <div class="footer-controls">
+        <button onclick="shareTasks()" class="text-btn">Share</button>
+        <button onclick="exportData()" class="text-btn">Backup</button>
+        <button onclick="triggerImport()" class="text-btn">Restore</button>
+        <input type="file" id="import-file" style="display:none" onchange="importData(this)" accept=".json">
+    </div>
+</div>
+
+<div id="toast" class="toast">Action Completed</div>
+
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./service-worker.js').catch(err => console.log('SW Fail', err));
+        });
+    }
+
+    // --- State ---
+    let tasks = JSON.parse(localStorage.getItem('chronos_tasks')) || [];
+    let selectedDate = new Date().toISOString().split('T')[0]; 
+    let currentDashboard = 'Personal'; 
+    let todayStr = new Date().toISOString().split('T')[0];
+
+    // --- DOM ---
+    const input = document.getElementById('task-input');
+    const list = document.getElementById('task-list');
+    const globalTimerDisplay = document.getElementById('global-timer');
+
+    function save() { localStorage.setItem('chronos_tasks', JSON.stringify(tasks)); }
+
+    // --- Core Render Logic ---
+    function render() {
+        list.innerHTML = '';
+        document.getElementById('view-date-display').innerText = new Date(selectedDate).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+        document.getElementById('go-today-btn').style.display = selectedDate === todayStr ? 'none' : 'inline-block';
+
+        const visibleTasks = tasks.filter(t => t.date === selectedDate && t.category === currentDashboard && t.type !== 'weekly');
+
+        if (visibleTasks.length === 0) {
+            list.innerHTML = `<div class="empty-state">No tasks for this day</div>`;
+        } else {
+            visibleTasks.forEach(task => {
+                const li = document.createElement('li');
+                li.className = `task-item ${task.completed ? 'completed' : ''} ${task.isRunning ? 'running' : ''}`;
+                
+                // --- Edit Mode vs Normal Mode ---
+                if (task.isEditing) {
+                    // Edit Mode
+                    const minutes = Math.floor(task.time / 60);
+                    li.innerHTML = `
+                        <div class="edit-row">
+                            <input type="text" class="edit-input-text" id="edit-text-${task.id}" value="${task.text}">
+                            <input type="tel" class="edit-input-time" id="edit-time-${task.id}" value="${minutes}" placeholder="Min">
+                            <button class="icon-btn save-btn" onclick="saveTaskEdit(${task.id})">
+                                <svg style="width:24px;height:24px;" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    // Normal Mode
+                    li.innerHTML = `
+                        <div class="task-main" onclick="toggleTaskStatus(${task.id})">
+                            ${task.completed ? 
+                                '<svg style="width:20px;height:20px;fill:var(--success)" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>' : 
+                                '<svg style="width:20px;height:20px;fill:var(--subtext);opacity:0.3" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>' 
+                            }
+                            <span class="task-text">${task.text}</span>
+                        </div>
+                        <div class="task-controls">
+                            <span class="task-timer" id="timer-${task.id}">${formatTime(task.time)}</span>
+                            <div class="btn-group">
+                                <button class="icon-btn edit-btn" onclick="toggleEditMode(${task.id})">
+                                    <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                                </button>
+                                <button class="icon-btn play-btn" onclick="toggleTimer(${task.id})">
+                                    ${task.isRunning ? 
+                                        '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>' : 
+                                        '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>'}
+                                </button>
+                                <button class="icon-btn delete-btn" onclick="deleteTask(${task.id})">
+                                    <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+                list.appendChild(li);
+            });
+        }
+        updateGlobalTotal();
+        updateCalendarStyles(); 
+    }
+
+    // --- Task Actions ---
+    function addTask() {
+        const text = input.value.trim();
+        if(!text) return;
+        tasks.push({
+            id: Date.now(), text, completed: false, time: 0, 
+            isRunning: false, date: selectedDate, category: currentDashboard, type: 'daily', isEditing: false
+        });
+        input.value = ''; save(); render();
+    }
+    
+    function toggleTaskStatus(id) { tasks = tasks.map(t => t.id === id ? {...t, completed: !t.completed, isRunning: false} : t); save(); render(); }
+    
+    function toggleTimer(id) { tasks = tasks.map(t => { if(t.id === id) return {...t, isRunning: !t.isRunning}; return {...t, isRunning: false}; }); save(); render(); }
+    
+    function deleteTask(id) { if(confirm('Delete?')) { tasks = tasks.filter(t => t.id !== id); save(); render(); } }
+
+    // --- Edit Logic ---
+    function toggleEditMode(id) {
+        tasks = tasks.map(t => {
+            if (t.id === id) return { ...t, isEditing: true, isRunning: false }; // Stop timer if editing
+            return t;
+        });
+        render();
+    }
+
+    function saveTaskEdit(id) {
+        const newText = document.getElementById(`edit-text-${id}`).value.trim();
+        const newMins = document.getElementById(`edit-time-${id}`).value;
+        
+        if (newText) {
+            tasks = tasks.map(t => {
+                if (t.id === id) {
+                    return { 
+                        ...t, 
+                        text: newText, 
+                        time: (parseInt(newMins) || 0) * 60, // Convert mins to seconds
+                        isEditing: false 
+                    };
+                }
+                return t;
+            });
+            save();
+            render();
+        }
+    }
+
+    // --- Calendar 3-Month Scroll Logic ---
+    function initCalendar() {
+        const strip = document.getElementById('calendar-strip');
+        strip.innerHTML = '';
+        
+        // Range: Today - 90 days to Today + 90 days
+        const start = new Date(); start.setDate(start.getDate() - 90);
+        const end = new Date(); end.setDate(end.getDate() + 90);
+        
+        let loopDate = new Date(start);
+        
+        while(loopDate <= end) {
+            const dateStr = loopDate.toISOString().split('T')[0];
+            const isToday = dateStr === todayStr;
+            
+            const el = document.createElement('div');
+            el.className = `day-card ${isToday ? 'today' : ''}`;
+            el.id = `date-${dateStr}`; 
+            el.onclick = () => { 
+                selectedDate = dateStr; 
+                render(); 
+                scrollToDate(dateStr, true);
+            };
+            
+            el.innerHTML = `
+                <div class="day-name">${loopDate.toLocaleDateString('en-US',{weekday:'short'})}</div>
+                <div class="day-num">${loopDate.getDate()}</div>
+            `;
+            strip.appendChild(el);
+            
+            loopDate.setDate(loopDate.getDate() + 1);
+        }
+        
+        setTimeout(() => scrollToDate(selectedDate, false), 100);
+    }
+
+    function updateCalendarStyles() {
+        document.querySelectorAll('.day-card').forEach(c => c.classList.remove('active'));
+        const el = document.getElementById(`date-${selectedDate}`);
+        if(el) el.classList.add('active');
+    }
+
+    function scrollToDate(dateStr, smooth) {
+        const el = document.getElementById(`date-${dateStr}`);
+        if(el) {
+            el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', inline: 'center', block: 'nearest' });
+        }
+    }
+
+    function jumpToToday() { selectedDate = todayStr; render(); scrollToDate(todayStr, true); }
+
+    // --- Weekly Logic ---
+    function toggleWeeklyGoals() { document.getElementById('weekly-goals-container').classList.toggle('open'); }
+    function addWeeklyGoal() {
+        const text = document.getElementById('weekly-input').value.trim();
+        if(!text) return;
+        tasks.push({ id: Date.now(), text, completed: false, type: 'weekly', category: currentDashboard, date: 'WEEKLY', time: 0 });
+        document.getElementById('weekly-input').value = '';
+        save(); renderWeeklyGoals();
+    }
+    function renderWeeklyGoals() {
+        const ul = document.getElementById('weekly-list'); ul.innerHTML = '';
+        const goals = tasks.filter(t => t.type === 'weekly' && t.category === currentDashboard);
+        document.getElementById('weekly-header-text').innerText = `Weekly Goals (${goals.filter(g=>g.completed).length}/${goals.length})`;
+        goals.forEach(g => {
+            const li = document.createElement('li');
+            li.className = `weekly-item ${g.completed ? 'done':''}`;
+            li.innerHTML = `<div class="weekly-check" onclick="toggleWeeklyStatus(${g.id})">${g.completed?'✓':''}</div><span style="flex-grow:1;font-size:0.9rem">${g.text}</span><span style="color:var(--danger);font-size:1.2rem;padding:0 10px;" onclick="deleteTask(${g.id})">×</span>`;
+            ul.appendChild(li);
+        });
+    }
+    function toggleWeeklyStatus(id) { tasks = tasks.map(t => t.id === id ? {...t, completed: !t.completed} : t); save(); renderWeeklyGoals(); }
+
+    // --- Global Ticker ---
+    setInterval(() => {
+        let active = false;
+        tasks = tasks.map(t => { if(t.isRunning) { active = true; return {...t, time: t.time + 1}; } return t; });
+        if(active) {
+            updateGlobalTotal();
+            if(Date.now() % 5000 < 1000) save(); 
+            tasks.filter(t=>t.isRunning).forEach(t => { const el = document.getElementById(`timer-${t.id}`); if(el) el.innerText = formatTime(t.time); });
+        }
+    }, 1000);
+
+    function formatTime(s) { const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60; return `${h>0?h+':':''}${m<10?'0'+m:m}:${sec<10?'0'+sec:sec}`; }
+    function updateGlobalTotal() { const total = tasks.filter(t => t.date === selectedDate && t.category === currentDashboard && t.type !== 'weekly').reduce((acc, t) => acc + t.time, 0); globalTimerDisplay.innerText = formatTime(total); }
+    function setDashboard(name) {
+        currentDashboard = name;
+        document.documentElement.style.setProperty('--accent', name === 'Office' ? '#ef4444' : '#38bdf8');
+        document.querySelectorAll('.switch-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`btn-${name.toLowerCase()}`).classList.add('active');
+        input.placeholder = `Add ${name} task...`; render(); renderWeeklyGoals();
+    }
+    
+    // --- Data Handlers ---
+    document.getElementById('date-jumper').addEventListener('change', (e) => { if(e.target.value) { selectedDate = e.target.value; render(); scrollToDate(selectedDate, true); } });
+    function exportData() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(tasks)); a.download = `chronos_backup_${selectedDate}.json`; a.click(); }
+    function triggerImport() { document.getElementById('import-file').click(); }
+    function importData(input) { const r = new FileReader(); r.onload = (e) => { if(confirm('Overwrite?')) { tasks = JSON.parse(e.target.result); save(); render(); renderWeeklyGoals(); }}; r.readAsText(input.files[0]); }
+    function shareTasks() { navigator.share({text: `Tasks for ${selectedDate}:\n` + tasks.filter(t => t.date === selectedDate && t.category === currentDashboard).map(t => `${t.completed?'[x]':'[ ]'} ${t.text} (${formatTime(t.time)})`).join('\n')}); }
+
+    // Init
+    document.getElementById('add-btn').addEventListener('click', addTask);
+    document.getElementById('task-input').addEventListener('keypress', e => e.key === 'Enter' && addTask());
+    initCalendar(); render(); renderWeeklyGoals();
+</script>
+</body>
+</html>
