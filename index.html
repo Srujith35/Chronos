@@ -4,11 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
-    <title>Chronos</title>
+    <title>Chronos v2</title>
     
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon-192.png">
-
     <style>
         :root {
             --bg: #0f172a;
@@ -35,6 +32,7 @@
             margin: 0;
             padding-top: 10px;
             overscroll-behavior-y: none;
+            user-select: none; /* Important for custom drag */
         }
 
         .container {
@@ -45,6 +43,7 @@
             flex-direction: column;
             height: 100dvh;
             padding-bottom: calc(10px + var(--safe-area-bottom));
+            position: relative;
         }
 
         /* --- Dashboard Switcher --- */
@@ -119,6 +118,12 @@
             scrollbar-width: none;
             flex-shrink: 0;
             -webkit-overflow-scrolling: touch;
+            min-height: 95px; /* Fixed height for drop target */
+            transition: background 0.3s;
+        }
+        .calendar-strip.drag-hover {
+            background: rgba(56, 189, 248, 0.1);
+            border-radius: 12px;
         }
         .calendar-strip::-webkit-scrollbar { display: none; }
         
@@ -138,6 +143,14 @@
             box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
         }
         .day-card.active.today { border: 2px solid #fff; background: var(--accent); color: var(--bg); }
+        
+        /* Drop Target Style for Calendar */
+        .day-card.drag-target {
+            background: var(--success) !important;
+            color: #000 !important;
+            transform: scale(1.1);
+            z-index: 10;
+        }
 
         .day-name { font-size: 0.75rem; text-transform: uppercase; margin-bottom: 4px; font-weight: 700; }
         .day-num { font-size: 1.4rem; font-weight: 800; }
@@ -154,14 +167,17 @@
         .weekly-content { display: none; padding: 0 16px 16px 16px; }
         .weekly-goals-container.open .weekly-content { display: block; }
         
-        .weekly-item { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 12px; }
-        .weekly-check { width: 22px; height: 22px; border: 2px solid var(--subtext); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+        .weekly-item { 
+            padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 12px; 
+            background: var(--card); border-radius: 8px; margin-bottom: 6px;
+            touch-action: none; /* Enable Custom Drag */
+        }
+        .weekly-check { width: 22px; height: 22px; border: 2px solid var(--subtext); border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;}
         .weekly-item.done .weekly-check { background: var(--success); border-color: var(--success); color: #000; }
         
         .weekly-input-row { display: flex; gap: 10px; margin-top: 12px; height: 40px; }
         .weekly-input { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: var(--text); border-radius: 8px; padding: 0 10px; font-size: 16px; }
         .weekly-text-input { flex-grow: 1; }
-        .weekly-time-input { width: 60px; text-align: center; }
         .weekly-add-btn { background: var(--accent); border: none; width: 40px; border-radius: 8px; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; }
 
         /* --- Task Input --- */
@@ -183,7 +199,15 @@
         ul.task-list-ul { 
             list-style: none; padding: 0; margin: 0; flex-grow: 1; 
             overflow-y: auto; padding-bottom: 40px; -webkit-overflow-scrolling: touch;
+            min-height: 100px;
+            border-radius: 12px;
+            transition: background 0.3s;
         }
+        ul.task-list-ul.drag-active {
+            background: rgba(255,255,255,0.05);
+            border: 2px dashed var(--accent);
+        }
+
         li.task-item {
             background: var(--card); margin-bottom: 12px; padding: 16px;
             border-radius: 16px; display: grid;
@@ -193,6 +217,8 @@
             border-left: 5px solid transparent; 
             user-select: none;
             position: relative;
+            touch-action: none; /* Crucial for Drag */
+            transition: transform 0.1s, opacity 0.2s;
         }
         li.task-item.running {
             border-left-color: var(--accent);
@@ -203,7 +229,7 @@
         .task-main { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; width: 100%; }
         .task-controls { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); }
 
-        .task-text { font-size: 1rem; line-height: 1.4; word-break: break-word; flex-grow: 1; }
+        .task-text { font-size: 1rem; line-height: 1.4; word-break: break-word; flex-grow: 1; pointer-events: none; }
         .task-timer { font-family: monospace; font-size: 1rem; color: var(--subtext); font-weight: 500; }
         li.task-item.running .task-timer { color: var(--accent); }
 
@@ -211,11 +237,10 @@
         .icon-btn { background: transparent; border: none; color: var(--subtext); padding: 5px; display: flex; align-items: center; }
         .icon-btn svg { width: 22px; height: 22px; fill: currentColor; }
 
-        /* Buttons Colors */
         .play-btn { color: #ffffff; filter: drop-shadow(0 0 2px rgba(255,255,255,0.4)); }
         .delete-btn { color: #ffffff; opacity: 0.8; }
-        .edit-btn { color: #ffffff; opacity: 0.8; } /* Added Edit Btn Style */
-        .save-btn { color: var(--success); } /* Save Btn Style */
+        .edit-btn { color: #ffffff; opacity: 0.8; }
+        .save-btn { color: var(--success); }
 
         /* Edit Mode Styles */
         .edit-row { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; width: 100%; }
@@ -225,10 +250,27 @@
         }
         .edit-input-time {
             background: rgba(0,0,0,0.3); border: 1px solid var(--accent); color: white;
-            padding: 8px; border-radius: 8px; width: 60px; text-align: center; font-size: 16px;
+            padding: 8px; border-radius: 8px; width: 80px; text-align: center; font-size: 16px;
         }
+        .edit-label { font-size: 0.7rem; color: var(--subtext); margin-right: 4px; }
 
-        .empty-state { text-align: center; color: var(--subtext); margin-top: 3rem; opacity: 0.6; }
+        .empty-state { text-align: center; color: var(--subtext); margin-top: 3rem; opacity: 0.6; pointer-events: none;}
+
+        /* --- Drag Ghost --- */
+        .drag-ghost {
+            position: fixed;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0.9;
+            transform: scale(1.05) rotate(2deg);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.5);
+            width: 300px; /* Fixed width for ghost */
+            background: var(--card);
+            padding: 16px;
+            border-radius: 16px;
+            color: var(--text);
+            border: 2px solid var(--accent);
+        }
 
         /* --- Footer --- */
         .footer-controls {
@@ -245,6 +287,44 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.5);
         }
         .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        .update-banner {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100%);
+    background: #1e293b;
+    color: #f9fafb;
+    padding: 10px 18px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: 0.3s ease;
+    z-index: 1000;
+    border: 1px solid rgba(148,163,184,0.5);
+    font-size: 0.9rem;
+}
+
+.update-banner button {
+    background: var(--accent);
+    border: none;
+    color: #0f172a;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.update-banner.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+}
+
     </style>
 </head>
 <body>
@@ -285,8 +365,7 @@
         <div class="weekly-content">
             <ul class="task-list-ul" id="weekly-list" style="max-height: 150px;"></ul>
             <div class="weekly-input-row">
-                <input type="text" class="weekly-input weekly-text-input" id="weekly-input" placeholder="Goal..." onkeypress="if(event.key === 'Enter') addWeeklyGoal()">
-                <input type="tel" class="weekly-input weekly-time-input" id="weekly-time-input" placeholder="Min" onkeypress="if(event.key === 'Enter') addWeeklyGoal()">
+                <input type="text" class="weekly-input weekly-text-input" id="weekly-input" placeholder="Goal (Long press to drag to daily)..." onkeypress="if(event.key === 'Enter') addWeeklyGoal()">
                 <button class="weekly-add-btn" onclick="addWeeklyGoal()">+</button>
             </div>
         </div>
@@ -310,12 +389,6 @@
 <div id="toast" class="toast">Action Completed</div>
 
 <script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./service-worker.js').catch(err => console.log('SW Fail', err));
-        });
-    }
-
     // --- State ---
     let tasks = JSON.parse(localStorage.getItem('chronos_tasks')) || [];
     let selectedDate = new Date().toISOString().split('T')[0]; 
@@ -338,20 +411,25 @@
         const visibleTasks = tasks.filter(t => t.date === selectedDate && t.category === currentDashboard && t.type !== 'weekly');
 
         if (visibleTasks.length === 0) {
-            list.innerHTML = `<div class="empty-state">No tasks for this day</div>`;
+            list.innerHTML = `<div class="empty-state">No tasks for this day<br><small>Long press weekly items to drop them here</small></div>`;
         } else {
             visibleTasks.forEach(task => {
                 const li = document.createElement('li');
                 li.className = `task-item ${task.completed ? 'completed' : ''} ${task.isRunning ? 'running' : ''}`;
+                li.setAttribute('data-id', task.id); // For Drag
+                li.setAttribute('data-type', 'daily'); // For Drag
                 
                 // --- Edit Mode vs Normal Mode ---
                 if (task.isEditing) {
-                    // Edit Mode
-                    const minutes = Math.floor(task.time / 60);
+                    // Edit Mode - Target Time Input
+                    const minutes = Math.floor((task.targetTime || 0) / 60);
                     li.innerHTML = `
                         <div class="edit-row">
                             <input type="text" class="edit-input-text" id="edit-text-${task.id}" value="${task.text}">
-                            <input type="tel" class="edit-input-time" id="edit-time-${task.id}" value="${minutes}" placeholder="Min">
+                            <div style="display:flex; flex-direction:column; align-items:center;">
+                                <span class="edit-label">TARGET</span>
+                                <input type="tel" class="edit-input-time" id="edit-target-${task.id}" value="${minutes}" placeholder="Min">
+                            </div>
                             <button class="icon-btn save-btn" onclick="saveTaskEdit(${task.id})">
                                 <svg style="width:24px;height:24px;" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
                             </button>
@@ -359,6 +437,11 @@
                     `;
                 } else {
                     // Normal Mode
+                    let timeDisplay = formatTime(task.time);
+                    if(task.targetTime > 0) {
+                        timeDisplay += ` / ${formatTime(task.targetTime)}`;
+                    }
+
                     li.innerHTML = `
                         <div class="task-main" onclick="toggleTaskStatus(${task.id})">
                             ${task.completed ? 
@@ -368,7 +451,7 @@
                             <span class="task-text">${task.text}</span>
                         </div>
                         <div class="task-controls">
-                            <span class="task-timer" id="timer-${task.id}">${formatTime(task.time)}</span>
+                            <span class="task-timer" id="timer-${task.id}">${timeDisplay}</span>
                             <div class="btn-group">
                                 <button class="icon-btn edit-btn" onclick="toggleEditMode(${task.id})">
                                     <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
@@ -385,6 +468,9 @@
                         </div>
                     `;
                 }
+                
+                // Attach Touch Listeners for Drag
+                attachDragListeners(li, task);
                 list.appendChild(li);
             });
         }
@@ -397,7 +483,7 @@
         const text = input.value.trim();
         if(!text) return;
         tasks.push({
-            id: Date.now(), text, completed: false, time: 0, 
+            id: Date.now(), text, completed: false, time: 0, targetTime: 0, 
             isRunning: false, date: selectedDate, category: currentDashboard, type: 'daily', isEditing: false
         });
         input.value = ''; save(); render();
@@ -407,12 +493,12 @@
     
     function toggleTimer(id) { tasks = tasks.map(t => { if(t.id === id) return {...t, isRunning: !t.isRunning}; return {...t, isRunning: false}; }); save(); render(); }
     
-    function deleteTask(id) { if(confirm('Delete?')) { tasks = tasks.filter(t => t.id !== id); save(); render(); } }
+    function deleteTask(id) { if(confirm('Delete?')) { tasks = tasks.filter(t => t.id !== id); save(); render(); renderWeeklyGoals(); } }
 
     // --- Edit Logic ---
     function toggleEditMode(id) {
         tasks = tasks.map(t => {
-            if (t.id === id) return { ...t, isEditing: true, isRunning: false }; // Stop timer if editing
+            if (t.id === id) return { ...t, isEditing: true, isRunning: false };
             return t;
         });
         render();
@@ -420,7 +506,7 @@
 
     function saveTaskEdit(id) {
         const newText = document.getElementById(`edit-text-${id}`).value.trim();
-        const newMins = document.getElementById(`edit-time-${id}`).value;
+        const newTargetMins = document.getElementById(`edit-target-${id}`).value;
         
         if (newText) {
             tasks = tasks.map(t => {
@@ -428,7 +514,7 @@
                     return { 
                         ...t, 
                         text: newText, 
-                        time: (parseInt(newMins) || 0) * 60, // Convert mins to seconds
+                        targetTime: (parseInt(newTargetMins) || 0) * 60, // Save as target seconds
                         isEditing: false 
                     };
                 }
@@ -439,14 +525,14 @@
         }
     }
 
-    // --- Calendar 3-Month Scroll Logic ---
+    // --- Calendar Logic ---
     function initCalendar() {
         const strip = document.getElementById('calendar-strip');
         strip.innerHTML = '';
         
-        // Range: Today - 90 days to Today + 90 days
-        const start = new Date(); start.setDate(start.getDate() - 90);
-        const end = new Date(); end.setDate(end.getDate() + 90);
+        // Range: Today - 30 days to Today + 60 days
+        const start = new Date(); start.setDate(start.getDate() - 30);
+        const end = new Date(); end.setDate(end.getDate() + 60);
         
         let loopDate = new Date(start);
         
@@ -457,6 +543,7 @@
             const el = document.createElement('div');
             el.className = `day-card ${isToday ? 'today' : ''}`;
             el.id = `date-${dateStr}`; 
+            el.setAttribute('data-date', dateStr); // For drop logic
             el.onclick = () => { 
                 selectedDate = dateStr; 
                 render(); 
@@ -506,11 +593,159 @@
         goals.forEach(g => {
             const li = document.createElement('li');
             li.className = `weekly-item ${g.completed ? 'done':''}`;
-            li.innerHTML = `<div class="weekly-check" onclick="toggleWeeklyStatus(${g.id})">${g.completed?'✓':''}</div><span style="flex-grow:1;font-size:0.9rem">${g.text}</span><span style="color:var(--danger);font-size:1.2rem;padding:0 10px;" onclick="deleteTask(${g.id})">×</span>`;
+            li.setAttribute('data-id', g.id); // For drag
+            li.setAttribute('data-type', 'weekly');
+            li.innerHTML = `<div class="weekly-check" onclick="toggleWeeklyStatus(${g.id})">${g.completed?'✓':''}</div><span style="flex-grow:1;font-size:0.9rem;pointer-events:none;">${g.text}</span><span style="color:var(--danger);font-size:1.2rem;padding:0 10px;" onclick="deleteTask(${g.id})">×</span>`;
+            attachDragListeners(li, g); // Enable drag
             ul.appendChild(li);
         });
     }
     function toggleWeeklyStatus(id) { tasks = tasks.map(t => t.id === id ? {...t, completed: !t.completed} : t); save(); renderWeeklyGoals(); }
+
+    // --- CUSTOM DRAG & DROP LOGIC (Mobile Friendly) ---
+    let dragTimer = null;
+    let draggedItem = null;
+    let draggedData = null;
+    let ghost = null;
+    let isDragging = false;
+
+    function attachDragListeners(element, taskData) {
+        element.addEventListener('touchstart', (e) => handleTouchStart(e, element, taskData), {passive: false});
+        element.addEventListener('touchmove', handleTouchMove, {passive: false});
+        element.addEventListener('touchend', handleTouchEnd);
+        // Mouse fallback
+        element.addEventListener('mousedown', (e) => handleTouchStart(e, element, taskData)); 
+    }
+
+    function handleTouchStart(e, element, data) {
+        if(e.target.tagName === 'BUTTON' || e.target.closest('.weekly-check') || e.target.tagName === 'INPUT') return; // Don't drag on buttons
+
+        draggedItem = element;
+        draggedData = data;
+        
+        // 500ms Long press to start drag
+        dragTimer = setTimeout(() => {
+            startDrag(e);
+        }, 500);
+    }
+
+    function startDrag(e) {
+        isDragging = true;
+        if(navigator.vibrate) navigator.vibrate(50); // Haptic feedback
+        
+        // Create Ghost
+        ghost = draggedItem.cloneNode(true);
+        ghost.classList.add('drag-ghost');
+        // Clean up ghost visuals
+        ghost.style.height = 'auto';
+        ghost.style.width = '250px';
+        ghost.style.background = '#1e293b';
+        document.body.appendChild(ghost);
+
+        // Position Ghost
+        moveGhost(e);
+
+        // Visual Cues
+        draggedItem.style.opacity = '0.4';
+        
+        // Highlight Drop Zones based on type
+        if(draggedData.type === 'weekly') {
+            document.getElementById('task-list').classList.add('drag-active');
+            showToast('Drop on list to make Daily');
+        } else {
+            // Daily Task -> Calendar
+            document.getElementById('calendar-strip').classList.add('drag-hover');
+            showToast('Drop on a Date to reschedule');
+        }
+    }
+
+    function moveGhost(e) {
+        if(!ghost) return;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        ghost.style.left = clientX + 'px';
+        ghost.style.top = clientY + 'px';
+    }
+
+    function handleTouchMove(e) {
+        if (dragTimer) clearTimeout(dragTimer); // Cancel drag if moved before 500ms
+        if (!isDragging) return;
+
+        e.preventDefault(); // Stop scrolling while dragging
+        moveGhost(e);
+
+        // Hit Test for Calendar Dates
+        if(draggedData.type !== 'weekly') {
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            document.querySelectorAll('.day-card').forEach(c => c.classList.remove('drag-target'));
+            const elBelow = document.elementFromPoint(clientX, clientY);
+            const dateCard = elBelow ? elBelow.closest('.day-card') : null;
+            if(dateCard) dateCard.classList.add('drag-target');
+        }
+    }
+
+    function handleTouchEnd(e) {
+        if (dragTimer) clearTimeout(dragTimer);
+        if (!isDragging) return;
+
+        isDragging = false;
+        
+        // Get drop location
+        const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+        const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+        const elBelow = document.elementFromPoint(clientX, clientY);
+
+        // LOGIC: Weekly -> Daily List
+        if (draggedData.type === 'weekly') {
+            const listArea = document.getElementById('task-list');
+            if (listArea.contains(elBelow) || elBelow === listArea) {
+                // Convert to Daily
+                tasks = tasks.map(t => {
+                    if(t.id === draggedData.id) {
+                        return { ...t, type: 'daily', date: selectedDate };
+                    }
+                    return t;
+                });
+                showToast('Moved to Today');
+            }
+        } 
+        // LOGIC: Daily -> Calendar Date
+        else {
+            const dateCard = elBelow ? elBelow.closest('.day-card') : null;
+            if (dateCard) {
+                const newDate = dateCard.getAttribute('data-date');
+                if (newDate && newDate !== selectedDate) {
+                    tasks = tasks.map(t => {
+                        if(t.id === draggedData.id) {
+                            return { ...t, date: newDate };
+                        }
+                        return t;
+                    });
+                    showToast(`Moved to ${new Date(newDate).toLocaleDateString()}`);
+                }
+            }
+        }
+
+        // Cleanup
+        if(ghost) ghost.remove();
+        draggedItem.style.opacity = '1';
+        document.getElementById('task-list').classList.remove('drag-active');
+        document.getElementById('calendar-strip').classList.remove('drag-hover');
+        document.querySelectorAll('.day-card').forEach(c => c.classList.remove('drag-target'));
+        
+        save();
+        render();
+        renderWeeklyGoals();
+    }
+    
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.innerText = msg;
+        t.classList.add('show');
+        setTimeout(()=>t.classList.remove('show'), 2000);
+    }
 
     // --- Global Ticker ---
     setInterval(() => {
@@ -519,12 +754,20 @@
         if(active) {
             updateGlobalTotal();
             if(Date.now() % 5000 < 1000) save(); 
-            tasks.filter(t=>t.isRunning).forEach(t => { const el = document.getElementById(`timer-${t.id}`); if(el) el.innerText = formatTime(t.time); });
+            tasks.filter(t=>t.isRunning).forEach(t => { 
+                const el = document.getElementById(`timer-${t.id}`); 
+                if(el) {
+                    let display = formatTime(t.time);
+                    if(t.targetTime > 0) display += ` / ${formatTime(t.targetTime)}`;
+                    el.innerText = display;
+                }
+            });
         }
     }, 1000);
 
     function formatTime(s) { const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60; return `${h>0?h+':':''}${m<10?'0'+m:m}:${sec<10?'0'+sec:sec}`; }
-    function updateGlobalTotal() { const total = tasks.filter(t => t.date === selectedDate && t.category === currentDashboard && t.type !== 'weekly').reduce((acc, t) => acc + t.time, 0); globalTimerDisplay.innerText = formatTime(total); }
+    function updateGlobalTotal() { const total = tasks.filter(t => t.date === selectedDate && t.category === currentDashboard && t.type !== 'daily' ? false : t.type !== 'weekly').reduce((acc, t) => acc + t.time, 0); globalTimerDisplay.innerText = formatTime(total); }
+    
     function setDashboard(name) {
         currentDashboard = name;
         document.documentElement.style.setProperty('--accent', name === 'Office' ? '#ef4444' : '#38bdf8');
@@ -544,6 +787,57 @@
     document.getElementById('add-btn').addEventListener('click', addTask);
     document.getElementById('task-input').addEventListener('keypress', e => e.key === 'Enter' && addTask());
     initCalendar(); render(); renderWeeklyGoals();
+
+    // --- PWA Service Worker + Update UI ---
+
+    let newWorker = null;
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').then((reg) => {
+                // Check if there's already a waiting worker (e.g. if user had app open)
+                if (reg.waiting) {
+                    showUpdateBanner(reg.waiting);
+                }
+
+                // Listen for new updates
+                reg.addEventListener('updatefound', () => {
+                    const installingWorker = reg.installing;
+                    installingWorker.addEventListener('statechange', () => {
+                        if (
+                            installingWorker.state === 'installed' &&
+                            navigator.serviceWorker.controller
+                        ) {
+                            // New version is installed and waiting
+                            showUpdateBanner(installingWorker);
+                        }
+                    });
+                });
+            });
+
+            // When the new worker takes over, reload to the new version
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                // avoid infinite loop: reload only once
+                window.location.reload();
+            });
+        });
+    }
+
+    function showUpdateBanner(worker) {
+        newWorker = worker;
+        const banner = document.getElementById('update-banner');
+        banner.classList.add('show');
+    }
+
+    function confirmUpdate() {
+        if (!newWorker) return;
+        newWorker.postMessage({ type: 'SKIP_WAITING' });
+        // controllerchange listener above will reload the page
+    }
 </script>
+    <div id="update-banner" class="update-banner">
+    <span>New version available</span>
+    <button onclick="confirmUpdate()">Update</button>
+</div>
 </body>
 </html>
