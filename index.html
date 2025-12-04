@@ -287,44 +287,6 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.5);
         }
         .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-        .update-banner {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%) translateY(100%);
-    background: #1e293b;
-    color: #f9fafb;
-    padding: 10px 18px;
-    border-radius: 999px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-    opacity: 0;
-    pointer-events: none;
-    transition: 0.3s ease;
-    z-index: 1000;
-    border: 1px solid rgba(148,163,184,0.5);
-    font-size: 0.9rem;
-}
-
-.update-banner button {
-    background: var(--accent);
-    border: none;
-    color: #0f172a;
-    font-weight: 700;
-    padding: 6px 12px;
-    border-radius: 999px;
-    cursor: pointer;
-}
-
-.update-banner.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-    pointer-events: auto;
-}
-
     </style>
 </head>
 <body>
@@ -601,52 +563,92 @@
         });
     }
     function toggleWeeklyStatus(id) { tasks = tasks.map(t => t.id === id ? {...t, completed: !t.completed} : t); save(); renderWeeklyGoals(); }
-
-    // --- CUSTOM DRAG & DROP LOGIC (Mobile Friendly) ---
+// --- CUSTOM DRAG & DROP LOGIC (Mobile Friendly) ---
     let dragTimer = null;
     let draggedItem = null;
     let draggedData = null;
     let ghost = null;
     let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let hasMoved = false;
 
     function attachDragListeners(element, taskData) {
-        element.addEventListener('touchstart', (e) => handleTouchStart(e, element, taskData), {passive: false});
-        element.addEventListener('touchmove', handleTouchMove, {passive: false});
-        element.addEventListener('touchend', handleTouchEnd);
-        // Mouse fallback
-        element.addEventListener('mousedown', (e) => handleTouchStart(e, element, taskData)); 
+        // Touch events
+        element.addEventListener('touchstart', (e) => handleDragStart(e, element, taskData), {passive: false});
+        element.addEventListener('touchmove', handleDragMove, {passive: false});
+        element.addEventListener('touchend', handleDragEnd, {passive: false});
+        element.addEventListener('touchcancel', handleDragCancel, {passive: false});
+        
+        // Mouse events
+        element.addEventListener('mousedown', (e) => handleDragStart(e, element, taskData));
     }
 
-    function handleTouchStart(e, element, data) {
-        if(e.target.tagName === 'BUTTON' || e.target.closest('.weekly-check') || e.target.tagName === 'INPUT') return; // Don't drag on buttons
+    // Global mouse listeners (added when drag starts)
+    function addMouseMoveListeners() {
+        document.addEventListener('mousemove', handleDragMove);
+        document.addEventListener('mouseup', handleDragEnd);
+    }
+
+    function removeMouseMoveListeners() {
+        document.removeEventListener('mousemove', handleDragMove);
+        document.removeEventListener('mouseup', handleDragEnd);
+    }
+
+    function handleDragStart(e, element, data) {
+        // Clean up any previous drag state first
+        cleanup();
+        
+        // Don't drag on interactive elements
+        if(e.target.tagName === 'BUTTON' || 
+           e.target.tagName === 'INPUT' || 
+           e.target.closest('.weekly-check') ||
+           e.target.closest('button') ||
+           e.target.closest('.icon-btn')) {
+            return;
+        }
+
+        // Prevent text selection during drag
+        e.preventDefault();
 
         draggedItem = element;
         draggedData = data;
+        hasMoved = false;
         
-        // 500ms Long press to start drag
+        // Store start position
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        startX = clientX;
+        startY = clientY;
+        
+        // Add mouse listeners if it's a mouse event
+        if (!e.touches) {
+            addMouseMoveListeners();
+        }
+        
+        // 400ms Long press to start drag
         dragTimer = setTimeout(() => {
             startDrag(e);
-        }, 500);
+        }, 400);
     }
 
     function startDrag(e) {
         isDragging = true;
         if(navigator.vibrate) navigator.vibrate(50); // Haptic feedback
         
+        // Add dragging class instead of inline styles
+        draggedItem.classList.add('dragging-source');
+        
         // Create Ghost
         ghost = draggedItem.cloneNode(true);
         ghost.classList.add('drag-ghost');
-        // Clean up ghost visuals
-        ghost.style.height = 'auto';
-        ghost.style.width = '250px';
-        ghost.style.background = '#1e293b';
+        ghost.classList.remove('dragging-source');
+        ghost.style.pointerEvents = 'none';
+        ghost.style.position = 'fixed';
         document.body.appendChild(ghost);
 
         // Position Ghost
         moveGhost(e);
-
-        // Visual Cues
-        draggedItem.style.opacity = '0.4';
         
         // Highlight Drop Zones based on type
         if(draggedData.type === 'weekly') {
@@ -663,44 +665,94 @@
         if(!ghost) return;
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        ghost.style.left = clientX + 'px';
-        ghost.style.top = clientY + 'px';
+        
+        // Offset ghost so it's centered on finger/cursor
+        ghost.style.left = (clientX - 125) + 'px';
+        ghost.style.top = (clientY - 40) + 'px';
     }
 
-    function handleTouchMove(e) {
-        if (dragTimer) clearTimeout(dragTimer); // Cancel drag if moved before 500ms
+    function handleDragMove(e) {
+        if (!draggedItem) return;
+        
+        // Check if moved beyond threshold (10px)
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const deltaX = Math.abs(clientX - startX);
+        const deltaY = Math.abs(clientY - startY);
+        
+        if (deltaX > 10 || deltaY > 10) {
+            hasMoved = true;
+            // Cancel drag timer if moved too much before long press completes
+            if (dragTimer && !isDragging) {
+                clearTimeout(dragTimer);
+                dragTimer = null;
+            }
+        }
+        
         if (!isDragging) return;
 
         e.preventDefault(); // Stop scrolling while dragging
         moveGhost(e);
 
-        // Hit Test for Calendar Dates
-        if(draggedData.type !== 'weekly') {
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            
-            document.querySelectorAll('.day-card').forEach(c => c.classList.remove('drag-target'));
-            const elBelow = document.elementFromPoint(clientX, clientY);
+        // Hit Test for Drop Zones
+        // Hide ghost temporarily for elementFromPoint
+        if(ghost) ghost.style.display = 'none';
+        const elBelow = document.elementFromPoint(clientX, clientY);
+        if(ghost) ghost.style.display = 'block';
+
+        // Remove all previous targets
+        document.querySelectorAll('.day-card').forEach(c => c.classList.remove('drag-target'));
+        
+        if(draggedData.type === 'weekly') {
+            // Highlight task list if hovering over it
+            const listArea = document.getElementById('task-list');
+            const isOverList = listArea.contains(elBelow) || elBelow === listArea;
+            if(isOverList) {
+                listArea.style.background = 'rgba(56, 189, 248, 0.15)';
+            } else {
+                listArea.style.background = '';
+            }
+        } else {
+            // Highlight calendar date cards
             const dateCard = elBelow ? elBelow.closest('.day-card') : null;
-            if(dateCard) dateCard.classList.add('drag-target');
+            if(dateCard) {
+                dateCard.classList.add('drag-target');
+            }
         }
     }
 
-    function handleTouchEnd(e) {
-        if (dragTimer) clearTimeout(dragTimer);
-        if (!isDragging) return;
+    function handleDragEnd(e) {
+        if (dragTimer) {
+            clearTimeout(dragTimer);
+            dragTimer = null;
+        }
+        
+        removeMouseMoveListeners();
+        
+        if (!isDragging) {
+            // Just a click/tap, not a drag
+            cleanup();
+            return;
+        }
 
+        e.preventDefault();
         isDragging = false;
         
         // Get drop location
         const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
         const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+        
+        // Hide ghost for accurate elementFromPoint
+        if(ghost) ghost.style.display = 'none';
         const elBelow = document.elementFromPoint(clientX, clientY);
+        if(ghost) ghost.style.display = 'block';
+
+        let dropped = false;
 
         // LOGIC: Weekly -> Daily List
         if (draggedData.type === 'weekly') {
             const listArea = document.getElementById('task-list');
-            if (listArea.contains(elBelow) || elBelow === listArea) {
+            if (listArea && (listArea.contains(elBelow) || elBelow === listArea)) {
                 // Convert to Daily
                 tasks = tasks.map(t => {
                     if(t.id === draggedData.id) {
@@ -708,7 +760,8 @@
                     }
                     return t;
                 });
-                showToast('Moved to Today');
+                showToast('Moved to Daily Tasks');
+                dropped = true;
             }
         } 
         // LOGIC: Daily -> Calendar Date
@@ -716,37 +769,88 @@
             const dateCard = elBelow ? elBelow.closest('.day-card') : null;
             if (dateCard) {
                 const newDate = dateCard.getAttribute('data-date');
-                if (newDate && newDate !== selectedDate) {
+                if (newDate) {
                     tasks = tasks.map(t => {
                         if(t.id === draggedData.id) {
                             return { ...t, date: newDate };
                         }
                         return t;
                     });
-                    showToast(`Moved to ${new Date(newDate).toLocaleDateString()}`);
+                    const dateObj = new Date(newDate);
+                    showToast(`Moved to ${dateObj.toLocaleDateString('en-US', {month:'short', day:'numeric'})}`);
+                    dropped = true;
+                    
+                    // Auto-switch to that date if it's different
+                    if(newDate !== selectedDate) {
+                        setTimeout(() => {
+                            selectedDate = newDate;
+                            render();
+                            scrollToDate(newDate, true);
+                        }, 500);
+                    }
                 }
             }
         }
 
-        // Cleanup
-        if(ghost) ghost.remove();
-        draggedItem.style.opacity = '1';
-        document.getElementById('task-list').classList.remove('drag-active');
-        document.getElementById('calendar-strip').classList.remove('drag-hover');
-        document.querySelectorAll('.day-card').forEach(c => c.classList.remove('drag-target'));
-        
-        save();
-        render();
-        renderWeeklyGoals();
-    }
-    
-    function showToast(msg) {
-        const t = document.getElementById('toast');
-        t.innerText = msg;
-        t.classList.add('show');
-        setTimeout(()=>t.classList.remove('show'), 2000);
+        if(dropped) {
+            save();
+            render();
+            renderWeeklyGoals();
+        }
+
+        cleanup();
     }
 
+    function handleDragCancel(e) {
+        if (dragTimer) {
+            clearTimeout(dragTimer);
+            dragTimer = null;
+        }
+        removeMouseMoveListeners();
+        cleanup();
+    }
+
+    function cleanup() {
+        // Cleanup
+        if(ghost) {
+            ghost.remove();
+            ghost = null;
+        }
+        
+        // Remove all dragging classes from all items
+        document.querySelectorAll('.dragging-source').forEach(el => {
+            el.classList.remove('dragging-source');
+        });
+        
+        if(draggedItem) {
+            draggedItem.classList.remove('dragging-source');
+            // Force reset all inline styles
+            draggedItem.style.cssText = '';
+        }
+        
+        const taskList = document.getElementById('task-list');
+        if(taskList) {
+            taskList.classList.remove('drag-active');
+            taskList.style.background = '';
+        }
+        const calendarStrip = document.getElementById('calendar-strip');
+        if(calendarStrip) {
+            calendarStrip.classList.remove('drag-hover');
+        }
+        document.querySelectorAll('.day-card').forEach(c => c.classList.remove('drag-target'));
+        
+        draggedItem = null;
+        draggedData = null;
+        isDragging = false;
+        hasMoved = false;
+        dragTimer = null;
+    }
+    function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.innerText = msg;
+    t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'), 2000);
+}
     // --- Global Ticker ---
     setInterval(() => {
         let active = false;
@@ -835,9 +939,5 @@
         // controllerchange listener above will reload the page
     }
 </script>
-    <div id="update-banner" class="update-banner">
-    <span>New version available</span>
-    <button onclick="confirmUpdate()">Update</button>
-</div>
 </body>
 </html>
